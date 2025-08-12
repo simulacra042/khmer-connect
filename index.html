@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Khmer Morphology Graph</title>
+  <title>Khmer Word Map<\/title>
   <style>
     :root{
       --bg:#0b1020;        /* deep blue/black */
@@ -87,9 +87,8 @@
 <body>
 <div class="row">
   <div class="top">
-    <strong class="title">Khmer Morphology Graph</strong>
+    <strong class="title">Khmer Word Map<\/strong>
     <div style="flex:1"></div>
-    <button id="randBtn" class="btn" title="Pick a random interesting word">Random</button>
     <span id="status" class="muted"></span>
     <input id="file" type="file" accept=".json" multiple class="btn" title="Load khmer_graph_v1.json manually" />
     <input id="fileSenses" type="file" accept=".json" class="btn" title="Load senses_v1.json (optional)" style="display:none" />
@@ -109,6 +108,7 @@
         <div class="muted" style="font-weight:600;margin-bottom:4px">Search (Khmer only)</div>
         <input id="q" class="input" placeholder="Type Khmer… (e.g., ជើង)" />
         <div id="sugs" class="sugs" style="display:none"></div>
+        <div style="margin-top:.5rem"><button id="randBtn" class="btn" style="width:100%" title="Pick a random interesting word">Random</button></div>
       </div>
 
       <details id="hubsWrap" open>
@@ -116,7 +116,7 @@
         <div id="hubs" class="hubs"></div>
       </details>
 
-      <div class="ctrl muted">Tip: drag background to pan • drag a node to nudge it • scroll to zoom • click a node to re‑center.</div>
+      
     </div>
 
     <div id="pane" class="right">
@@ -304,7 +304,7 @@
   function draw(){
     fitCanvas(); const dpr=window.devicePixelRatio||1; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,cv.width,cv.height);
     const W=cv.clientWidth, H=cv.clientHeight;
-    ctx.fillStyle=C.title; ctx.font="600 16px system-ui, 'Noto Sans Khmer', sans-serif"; ctx.fillText('Khmer Morphology Graph',12,22);
+    ctx.fillStyle=C.title; ctx.font="600 16px system-ui, 'Noto Sans Khmer', sans-serif"; ctx.fillText('Khmer Word Map',12,22);
     if(!S.g||S.center==null){ card.style.display='none'; return }
 
     // world transform: zoom/pan only view; layout fixed
