@@ -202,16 +202,18 @@
   function orderComponents(ids, centerId){
     const wordKh = S.g.vocab[centerId] || '';
     const wordRom = (S.g.roman[centerId] || '').trim();
-    const romTokens = wordRom ? wordRom.split(' ') : [];
+    const romTokens = wordRom ? wordRom.split(/[\s·'’]+/) : [];
 
     function posFor(id){
       const cKh = S.g.vocab[id] || '';
       const cRom = (S.g.roman[id] || '').trim();
       let pKh = cKh ? wordKh.indexOf(cKh) : -1;
       if(pKh >= 0) return pKh; // exact Khmer substring match wins
-      if(romTokens.length && cRom){
-        const idx = romTokens.indexOf(cRom);
-        if(idx >= 0) return 1000 + idx; // token position (offset so Khmer match is preferred)
+      if(cRom){
+        const idxTok = romTokens.length ? romTokens.indexOf(cRom) : -1;
+        if(idxTok >= 0) return 1000 + idxTok;
+        const idx = wordRom ? wordRom.indexOf(cRom) : -1;
+        if(idx >= 0) return 1000 + idx;
       }
       return Number.MAX_SAFE_INTEGER; // unknown position -> push to the end, stable sort will handle tie
     }
@@ -265,7 +267,28 @@
       const rem=Math.max(0,span-used), maxH=Math.max(...items.map(it=>it[1].h));
       rings.push({r,items,rem,maxH}); r+=Math.max(RING_GAP_MIN, maxH+18);
     }
-    const out=[]; for(const ring of rings){ const gap = ring.items.length>1 ? ring.rem/(ring.items.length+1) : ring.rem/2; let a=centerA - ((ring.items.reduce((s,it)=>s+it[2],0)+ring.rem)/2) + gap; for(const [id,ch,aw] of ring.items){ const th=a+aw/2; const bx=cx+ring.r*Math.cos(th), by=cy+ring.r*Math.sin(th); const nud=(S.nudges[S.center]||{})[id]||{dx:0,dy:0}; out.push({id, bx,by, x:bx+nud.dx, y:by+nud.dy, w:ch.w,h:ch.h, label:ch.label, sub:ch.sub, group:dir}); a+=aw+gap; } }
+    const out=[];
+    for(const ring of rings){
+      const gap = ring.items.length>1 ? ring.rem/(ring.items.length+1) : ring.rem/2;
+      const totalSpan = ring.items.reduce((s,it)=>s+it[2],0) + ring.rem;
+      const aStart = centerA - totalSpan/2 + gap;
+      const aEnd   = centerA + totalSpan/2 - gap;
+      let a=aStart;
+      const nodes=[]; // temp nodes for this ring
+      for(const [id,ch,aw] of ring.items){ const th=a+aw/2; nodes.push({id,ch,aw,th}); a+=aw+gap; }
+      // non-overlap sweep along arc (axis-aligned rectangles)
+      const M=8;
+      for(let k=1;k<nodes.length;k++){
+        const prev=nodes[k-1], curr=nodes[k];
+        let px=cx + ring.r*Math.cos(prev.th);
+        let cxn=cx + ring.r*Math.cos(curr.th);
+        while( (px + prev.ch.w/2 + M) > (cxn - curr.ch.w/2) && (curr.th + curr.aw/2) < aEnd ){
+          curr.th += 0.004;
+          cxn = cx + ring.r*Math.cos(curr.th);
+        }
+      }
+      for(const n of nodes){ const bx=cx+ring.r*Math.cos(n.th), by=cy+ring.r*Math.sin(n.th); const nud=(S.nudges[S.center]||{})[n.id]||{dx:0,dy:0}; out.push({id:n.id, bx,by, x:bx+nud.dx, y:by+nud.dy, w:n.ch.w, h:n.ch.h, label:n.ch.label, sub:n.ch.sub, group:dir}); }
+    }
     return out;
   }
 
