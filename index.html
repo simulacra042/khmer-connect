@@ -391,7 +391,7 @@
     // Sort each bucket
     primary.sort((a,b)=>b.score-a.score);
     secondary.sort((a,b)=>b.score-a.score);
-    tertiary.sort((a,b)=>b.score-a.score);
+    tertiary.sort((a,b)=>b.score - a.score);
 
     // Merge with de-dup, keeping earliest bucket priority
     const seen = new Set();
@@ -409,50 +409,7 @@
     // Cap to a big, but bounded pool
     S.seeds = out.slice(0, 3000);
     status.textContent = (status.textContent? status.textContent+' • ' : '') + `random pool ${S.seeds.length}`;
-  });
-      }
-    }
-
-    // Secondary: strong graph hubs even if fewer components
-    const secondary = [];
-    for(let i=0;i<N;i++){
-      if(deg[i] >= 12){
-        const score = compTot[i]*120 + deg[i]*3;
-        secondary.push({i,score});
-      }
-    }
-
-    // Tertiary: at least some morphology and moderate degree
-    const tertiary = [];
-    for(let i=0;i<N;i++){
-      if(compTot[i] >= 1 && deg[i] >= 3){
-        const score = compTot[i]*100 + deg[i]*2;
-        tertiary.push({i,score});
-      }
-    }
-
-    // Sort each bucket
-    primary.sort((a,b)=>b.score-a.score);
-    secondary.sort((a,b)=>b.score-a.score);
-    tertiary.sort((a,b)=>b.score-a.score);
-
-    // Merge with de-dup, keeping earliest bucket priority
-    const seen = new Set();
-    const out = [];
-    for(const arr of [primary, secondary, tertiary]){
-      for(const x of arr){ if(!seen.has(x.i)){ seen.add(x.i); out.push(x.i); } }
-    }
-
-    // Ensure a generous pool: if < 300, pad by top-by-degree overall
-    if(out.length < 300){
-      const byDeg = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
-      for(const i of byDeg){ if(out.length>=300) break; if(!seen.has(i)){ seen.add(i); out.push(i); } }
-    }
-
-    // Cap to a big, but bounded pool
-    S.seeds = out.slice(0, 3000);
-    status.textContent = (status.textContent? status.textContent+' • ' : '') + `random pool ${S.seeds.length}`;
-  }); } } list.sort((a,b)=>b.score-a.score); S.seeds=list.slice(0,5000).map(x=>x.i); }
+  }
 
   // ---------- Load ----------
   function isGraphJson(obj){ return obj && Array.isArray(obj.vocab) && obj.edges && obj.edges.compound && Array.isArray(obj.roman) && Array.isArray(obj.gloss); }
