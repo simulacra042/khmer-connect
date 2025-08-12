@@ -100,8 +100,8 @@
       <div class="ctrl">
         <div class="muted" style="font-weight:600;margin-bottom:6px">Alphabet</div>
         <div class="seg">
-          <button id="btnKh" class="active" title="Show Khmer">ខ្មែរ</button>
-          <button id="btnRom" title="Show WT Romanization">ABC</button>
+          <button id="btnKh" title="Show Khmer">ខ្មែរ</button>
+          <button id="btnRom" class="active" title="Show WT Romanization">ABC</button>
         </div>
       </div>
 
@@ -197,12 +197,44 @@
   function top10(){ const deg=S.g.neighbors.map(n=>n.length); const ids=[...deg.keys()].sort((a,b)=>deg[b]-deg[a]||S.g.vocab[a].localeCompare(S.g.vocab[b])).slice(0,10); return ids.map(id=>({id,deg:deg[id]})) }
 
   // ---------- Grouping ----------
+  // Try to order component chips (below) to match the written order of the compound.
+  // We look for component substrings first in the Khmer word, then in romanization tokens.
+  function orderComponents(ids, centerId){
+    const wordKh = S.g.vocab[centerId] || '';
+    const wordRom = (S.g.roman[centerId] || '').trim();
+    const romTokens = wordRom ? wordRom.split(' ') : [];
+
+    function posFor(id){
+      const cKh = S.g.vocab[id] || '';
+      const cRom = (S.g.roman[id] || '').trim();
+      let pKh = cKh ? wordKh.indexOf(cKh) : -1;
+      if(pKh >= 0) return pKh; // exact Khmer substring match wins
+      if(romTokens.length && cRom){
+        const idx = romTokens.indexOf(cRom);
+        if(idx >= 0) return 1000 + idx; // token position (offset so Khmer match is preferred)
+      }
+      return Number.MAX_SAFE_INTEGER; // unknown position -> push to the end, stable sort will handle tie
+    }
+
+    return ids.slice().sort((a,b)=>{
+      const pa = posFor(a), pb = posFor(b);
+      if(pa !== pb) return pa - pb;
+      // stable fallback: romanization then Khmer
+      const ra = (S.g.roman[a]||'');
+      const rb = (S.g.roman[b]||'');
+      if(ra !== rb) return ra.localeCompare(rb);
+      return (S.g.vocab[a]||'').localeCompare(S.g.vocab[b]||'');
+    });
+  }
+
   function groupNeighbors(){
     const id=S.center, g=S.g, inv=S.inv; if(id==null) return {below:[],above:[]};
-    const below=[...(g.edges.compound[id]||[]), ...(g.edges.affixed[id]||[])];
+    const belowRaw=[...(g.edges.compound[id]||[]), ...(g.edges.affixed[id]||[])];
+    const dedupBelow=[...new Set(belowRaw)];
+    const below = orderComponents(dedupBelow, id);
     const above=new Set([...(g.edges.derived[id]||[]), ...(inv.cParents[id]||[]), ...(inv.aParents[id]||[])]);
     for(const x of below) above.delete(x); above.delete(id);
-    return {below:[...new Set(below)], above:[...above]};
+    return {below, above:[...above]};
   }
 
   // ---------- Chip sizing ----------
@@ -281,11 +313,10 @@
     // Always allow expanding to show the Wiktionary link (even if no senses file)
     expandBtn.style.display = 'inline-block';
     if (S.defsOpen) {
-      let html = '';
+      let html = `<a href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener" class="link">Wiktionary ↗</a>`;
       if (senses.length) {
         html += '<h4>All senses</h4><ul>' + senses.map(g=>`<li>${g}</li>`).join('') + '</ul>';
       }
-      html += `<a href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener" class="link">Wiktionary ↗</a>`;
       defsPanel.innerHTML = html;
       S.lastDefsWord = word;
       card.classList.add('open');
@@ -322,7 +353,106 @@
   q.addEventListener('input', updateSugs); q.addEventListener('keydown', (e)=>{ if(e.key==='Enter'&&sugs.firstChild){ sugs.firstChild.click() } });
 
   // ---------- Seeds ----------
-  function computeSeeds(){ const list=[]; for(let i=0;i<S.g.vocab.length;i++){ const comp=(S.g.edges.compound[i]?.length||0)+(S.g.edges.affixed[i]?.length||0); const deg=S.g.neighbors[i]?.length||0; if(comp>=2 && deg>=6){ const mid=32,score=comp*120 - Math.abs(deg-mid)*3 + Math.min(deg,70); list.push({i,score}); } } list.sort((a,b)=>b.score-a.score); S.seeds=list.slice(0,5000).map(x=>x.i); }
+  function computeSeeds(){
+    const N = S.g.vocab.length;
+    const deg = S.g.neighbors.map(n=> (n&&n.length)||0);
+    const comp = S.g.edges.compound.map(a=> (a&&a.length)||0);
+    const aff  = S.g.edges.affixed.map(a=> (a&&a.length)||0);
+    const compTot = comp.map((c,i)=>c+aff[i]);
+
+    // Primary: rich morphology + healthy graph degree
+    const primary = [];
+    for(let i=0;i<N;i++){
+      if(compTot[i] >= 2 && deg[i] >= 6){
+        // score favors more components, but avoids extreme hubs
+        const score = compTot[i]*220 - Math.abs(deg[i]-28)*4 + Math.min(deg[i],90);
+        primary.push({i,score});
+      }
+    }
+
+    // Secondary: strong graph hubs even if fewer components
+    const secondary = [];
+    for(let i=0;i<N;i++){
+      if(deg[i] >= 12){
+        const score = compTot[i]*120 + deg[i]*3;
+        secondary.push({i,score});
+      }
+    }
+
+    // Tertiary: at least some morphology and moderate degree
+    const tertiary = [];
+    for(let i=0;i<N;i++){
+      if(compTot[i] >= 1 && deg[i] >= 3){
+        const score = compTot[i]*100 + deg[i]*2;
+        tertiary.push({i,score});
+      }
+    }
+
+    // Sort each bucket
+    primary.sort((a,b)=>b.score-a.score);
+    secondary.sort((a,b)=>b.score-a.score);
+    tertiary.sort((a,b)=>b.score-a.score);
+
+    // Merge with de-dup, keeping earliest bucket priority
+    const seen = new Set();
+    const out = [];
+    for(const arr of [primary, secondary, tertiary]){
+      for(const x of arr){ if(!seen.has(x.i)){ seen.add(x.i); out.push(x.i); } }
+    }
+
+    // Ensure a generous pool: if < 300, pad by top-by-degree overall
+    if(out.length < 300){
+      const byDeg = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
+      for(const i of byDeg){ if(out.length>=300) break; if(!seen.has(i)){ seen.add(i); out.push(i); } }
+    }
+
+    // Cap to a big, but bounded pool
+    S.seeds = out.slice(0, 3000);
+    status.textContent = (status.textContent? status.textContent+' • ' : '') + `random pool ${S.seeds.length}`;
+  });
+      }
+    }
+
+    // Secondary: strong graph hubs even if fewer components
+    const secondary = [];
+    for(let i=0;i<N;i++){
+      if(deg[i] >= 12){
+        const score = compTot[i]*120 + deg[i]*3;
+        secondary.push({i,score});
+      }
+    }
+
+    // Tertiary: at least some morphology and moderate degree
+    const tertiary = [];
+    for(let i=0;i<N;i++){
+      if(compTot[i] >= 1 && deg[i] >= 3){
+        const score = compTot[i]*100 + deg[i]*2;
+        tertiary.push({i,score});
+      }
+    }
+
+    // Sort each bucket
+    primary.sort((a,b)=>b.score-a.score);
+    secondary.sort((a,b)=>b.score-a.score);
+    tertiary.sort((a,b)=>b.score-a.score);
+
+    // Merge with de-dup, keeping earliest bucket priority
+    const seen = new Set();
+    const out = [];
+    for(const arr of [primary, secondary, tertiary]){
+      for(const x of arr){ if(!seen.has(x.i)){ seen.add(x.i); out.push(x.i); } }
+    }
+
+    // Ensure a generous pool: if < 300, pad by top-by-degree overall
+    if(out.length < 300){
+      const byDeg = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
+      for(const i of byDeg){ if(out.length>=300) break; if(!seen.has(i)){ seen.add(i); out.push(i); } }
+    }
+
+    // Cap to a big, but bounded pool
+    S.seeds = out.slice(0, 3000);
+    status.textContent = (status.textContent? status.textContent+' • ' : '') + `random pool ${S.seeds.length}`;
+  }); } } list.sort((a,b)=>b.score-a.score); S.seeds=list.slice(0,5000).map(x=>x.i); }
 
   // ---------- Load ----------
   function isGraphJson(obj){ return obj && Array.isArray(obj.vocab) && obj.edges && obj.edges.compound && Array.isArray(obj.roman) && Array.isArray(obj.gloss); }
