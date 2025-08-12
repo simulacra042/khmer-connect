@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Khmer Morphology Graph</title>
+  <style>
+    :root{
+      --bg:#0b1020;        /* deep blue/black */
+      --fg:#ffffff;        /* UI text */
+      --muted:#cbd5e1;     /* slate-300 */
+      --border:#1f2937;    /* slate-800 */
+      --btnBg:#111827;     /* dark btn */
+      --accent:#93c5fd;    /* link */
+      --chipOtherBG:rgba(124,58,237,.18);
+      --chipOtherBD:#a78bfa;
+      --chipCompBG:rgba(13,148,136,.18);
+      --chipCompBD:#2dd4bf;
+      --chipMain:#ffffff;
+      --chipSub:#e5e7eb;
+      --spoke:#475569;
+    }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans Khmer','Khmer OS',sans-serif}
+    .row{display:grid;grid-template-rows:auto 1fr;height:100%}
+    .top{display:flex;align-items:center;gap:.75rem;border-bottom:1px solid var(--border);padding:.5rem .75rem}
+    .title{font-weight:700}
+    .muted{color:var(--muted);font-size:12px}
+    .content{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 42px)}
+    .left{border-right:1px solid var(--border);padding:12px;overflow:auto}
+    .ctrl{margin-bottom:12px}
+    .input{width:100%;padding:.45rem .6rem;border:1px solid var(--border);border-radius:.375rem;font-size:16px;background:#0a0f1e;color:var(--fg)}
+    .btn{padding:.35rem .6rem;border:1px solid var(--border);border-radius:.375rem;background:var(--btnBg);color:var(--fg);cursor:pointer}
+    .sugs{max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:.375rem;margin-top:.35rem;background:#0a0f1e}
+    .sug{padding:.5rem .6rem;cursor:pointer;color:var(--fg);border-bottom:1px solid var(--border)}
+    .sug:last-child{border-bottom:0}
+    .sug .w{font-weight:600}
+    .sug .meta{font-size:12px;color:#a5b4fc}
+    .sug .gl{font-size:12px;color:#cbd5e1}
+    .sug:hover{background:#111827}
+
+    /* Segmented alphabet toggle */
+    .seg{display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden}
+    .seg button{background:#0a0f1e;color:#a3b2c7;border:0;padding:.4rem .75rem;cursor:pointer}
+    .seg button.active{background:#1f2937;color:#ffffff}
+
+    /* Collapsible Top 10 */
+    details{border:1px solid var(--border);border-radius:.5rem;background:#0a0f1e}
+    details+details{margin-top:10px}
+    summary{list-style:none;cursor:pointer;padding:.6rem .75rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
+    summary::marker{display:none}
+    .caret{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid var(--muted);transition:transform 160ms ease}
+    details[open] .caret{transform:rotate(180deg)}
+    .hubs{display:grid;grid-template-columns:1fr auto;gap:.25rem .5rem;padding:.5rem}
+    .hub{cursor:pointer;color:#e5e7eb}
+    .hub small{color:#9fb7ff}
+    .hub:hover{text-decoration:underline}
+    .deg{color:#94a3b8}
+
+    .right{position:relative}
+    canvas{width:100%;height:calc(100vh - 42px);display:block;overscroll-behavior:contain;touch-action:none}
+    .tip{position:absolute;pointer-events:none;background:rgba(2,6,23,.95);border:1px solid #475569;border-radius:.375rem;box-shadow:0 8px 24px rgba(0,0,0,.25);padding:.25rem .5rem;color:#fff}
+    .tip .t1{font-size:16px}
+    .tip .t2{font-size:12px;color:#cbd5e1}
+
+    /* Center-word Wiktionary link overlay */
+    .wlink{display:none}
+    /* Focus card with collapsible senses */
+    .card{position:absolute;display:none;max-width:560px;background:#0a0f1e;border:1px solid #334155;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:.5rem .75rem;transform:translate(-50%,-60%)}
+    .card .hdr{display:flex;align-items:center;gap:.5rem}
+    .card .w{font:700 18px system-ui,'Noto Sans Khmer',sans-serif;color:#fff}
+    .card .sub{font:400 12px system-ui,'Noto Sans Khmer',sans-serif;color:#cbd5e1}
+    .card .chev{margin-left:auto;border:1px solid #334155;background:#0b1224;color:#cbd5e1;border-radius:999px;width:28px;height:28px;cursor:pointer;line-height:26px}
+    .card.open .chev{transform:rotate(180deg)}
+    .card .panel{display:none;margin-top:.35rem;max-height:220px;overflow:auto;border-top:1px dashed #334155;padding-top:.35rem}
+    .card.open .panel{display:block}
+    .card .panel h4{margin:.1rem 0 .25rem 0;font:600 12px system-ui,'Noto Sans Khmer',sans-serif;color:#93c5fd}
+    .card .panel ul{margin:.25rem 0 0 1rem;padding:0}
+    .card .panel li{margin:.15rem 0}
+    .card .link{display:inline-block;margin-top:.35rem;font-size:12px;color:var(--accent);text-decoration:none}
+    .card .link:hover{text-decoration:underline}
+
+    /* Hidden by default; shown only if auto-load fails */
+    #file{display:none}
+  </style>
+</head>
+<body>
+<div class="row">
+  <div class="top">
+    <strong class="title">Khmer Morphology Graph</strong>
+    <div style="flex:1"></div>
+    <button id="randBtn" class="btn" title="Pick a random interesting word">Random</button>
+    <span id="status" class="muted"></span>
+    <input id="file" type="file" accept=".json" multiple class="btn" title="Load khmer_graph_v1.json manually" />
+    <input id="fileSenses" type="file" accept=".json" class="btn" title="Load senses_v1.json (optional)" style="display:none" />
+  </div>
+
+  <div class="content">
+    <div class="left">
+      <div class="ctrl">
+        <div class="muted" style="font-weight:600;margin-bottom:6px">Alphabet</div>
+        <div class="seg">
+          <button id="btnKh" class="active" title="Show Khmer">ខ្មែរ</button>
+          <button id="btnRom" title="Show WT Romanization">ABC</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <div class="muted" style="font-weight:600;margin-bottom:4px">Search (Khmer only)</div>
+        <input id="q" class="input" placeholder="Type Khmer… (e.g., ជើង)" />
+        <div id="sugs" class="sugs" style="display:none"></div>
+      </div>
+
+      <details id="hubsWrap" open>
+        <summary><span class="caret"></span><span style="font-weight:600">Top 10 most connected</span></summary>
+        <div id="hubs" class="hubs"></div>
+      </details>
+
+      <div class="ctrl muted">Tip: drag background to pan • drag a node to nudge it • scroll to zoom • click a node to re‑center.</div>
+    </div>
+
+    <div id="pane" class="right">
+      <canvas id="cv"></canvas>
+      <div id="centerCard" class="card">
+        <div class="hdr">
+          <div class="twrap">
+            <div id="cardTitle" class="w"></div>
+            <div id="cardSub" class="sub"></div>
+          </div>
+          <button id="expandBtn" class="chev" title="Show all senses">▾</button>
+        </div>
+        <div class="panel" id="defsPanel"></div>
+        <a id="cardLink" class="link" target="_blank" rel="noopener">Wiktionary ↗</a>
+      </div>
+      <div id="tip" class="tip" style="display:none">
+        <div class="t1" id="tip1"></div>
+        <div class="t2" id="tip2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Khmer Morphology Visualizer (clean single-file). Assumes khmer_graph_v1.json in same folder.
+(function(){
+  // ---------- Constants ----------
+  const MAX_CHIP_W = 260;
+  const ARC_SPAN_BASE = Math.PI*0.92;  // ~165°
+  const ARC_SPAN_WIDE = Math.PI*1.22;  // allow spill when crowded
+  const RING_GAP_MIN = 64;
+  const R_BASE = 170;                  // room for center title block
+  const ANG_PAD = 24;                  // px of extra angular padding per chip
+  const CLICK_MOVE_EPS = 4;
+
+  // Colors
+  const C = {
+    title:'#fff', center:'#fff', sub:'#cbd5e1',
+    chipOtherBG:getComputedStyle(document.documentElement).getPropertyValue('--chipOtherBG').trim(),
+    chipOtherBD:getComputedStyle(document.documentElement).getPropertyValue('--chipOtherBD').trim(),
+    chipCompBG:getComputedStyle(document.documentElement).getPropertyValue('--chipCompBG').trim(),
+    chipCompBD:getComputedStyle(document.documentElement).getPropertyValue('--chipCompBD').trim(),
+    chipMain:getComputedStyle(document.documentElement).getPropertyValue('--chipMain').trim(),
+    chipSub:getComputedStyle(document.documentElement).getPropertyValue('--chipSub').trim(),
+    spoke:getComputedStyle(document.documentElement).getPropertyValue('--spoke').trim(),
+  };
+
+  // ---------- State ----------
+  const S = {
+    g:null, inv:null, idMap:null, center:null,
+    mode:'kh', nodes:[], panX:0, panY:0, scale:1,
+    nudges:Object.create(null), hubs:[], seeds:[],
+    senses:null, lastDefsWord:null, defsOpen:false,
+  };
+
+  // ---------- DOM ----------
+  const $ = (id)=>document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const tip = $('tip'), tip1=$('tip1'), tip2=$('tip2');
+  const pane=$('pane'), status=$('status'), file=$('file'), fileSenses=$('fileSenses');
+  const btnKh=$('btnKh'), btnRom=$('btnRom'), randBtn=$('randBtn');
+  const q=$('q'), sugs=$('sugs'), hubs=$('hubs');
+  const card=$('centerCard'), cardTitle=$('cardTitle'), cardSub=$('cardSub'), cardLink=$('cardLink'), defsPanel=$('defsPanel'), expandBtn=$('expandBtn');// ---------- Utils ----------
+  function fitCanvas(){ const r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1; cv.width=Math.max(1,Math.floor(r.width*dpr)); cv.height=Math.max(1,Math.floor(r.height*dpr)); }
+  function setStatus(t){ status.textContent=t }
+  function measure(text, font){ const t=ctx.getTransform(), f0=ctx.font; ctx.setTransform(1,0,0,1,0,0); ctx.font=font; const w=Math.ceil(ctx.measureText(text).width); ctx.font=f0; ctx.setTransform(t); return w }
+  function elide(text, font, maxW){ let w=measure(text,font); if(w<=maxW) return text; const E='…'; let lo=0,hi=text.length; while(lo<hi){ const m=(lo+hi)>>1; if(measure(text.slice(0,m)+E,font)<=maxW) lo=m+1; else hi=m; } return text.slice(0,Math.max(0,lo-1))+E }
+  const label=(id)=> S.mode==='rom' ? (S.g.roman[id]||S.g.vocab[id]) : S.g.vocab[id];
+  const other=(id)=> S.mode==='kh' ? (S.g.roman[id]||'') : S.g.vocab[id];
+
+  // ---------- Inverses & Hubs ----------
+  function buildInv(g){
+    const N=g.vocab.length, d=Array.from({length:N},()=>[]), c=Array.from({length:N},()=>[]), a=Array.from({length:N},()=>[]);
+    for(let i=0;i<N;i++){ for(const j of g.edges.derived[i]) if(j!==i) d[j].push(i); for(const j of g.edges.compound[i]) if(j!==i) c[j].push(i); for(const j of g.edges.affixed[i]) if(j!==i) a[j].push(i); }
+    return {dParents:d, cParents:c, aParents:a};
+  }
+  const idMap=(v)=>{ const m=new Map(); v.forEach((w,i)=>m.set(w,i)); return m };
+  function top10(){ const deg=S.g.neighbors.map(n=>n.length); const ids=[...deg.keys()].sort((a,b)=>deg[b]-deg[a]||S.g.vocab[a].localeCompare(S.g.vocab[b])).slice(0,10); return ids.map(id=>({id,deg:deg[id]})) }
+
+  // ---------- Grouping ----------
+  function groupNeighbors(){
+    const id=S.center, g=S.g, inv=S.inv; if(id==null) return {below:[],above:[]};
+    const below=[...(g.edges.compound[id]||[]), ...(g.edges.affixed[id]||[])];
+    const above=new Set([...(g.edges.derived[id]||[]), ...(inv.cParents[id]||[]), ...(inv.aParents[id]||[])]);
+    for(const x of below) above.delete(x); above.delete(id);
+    return {below:[...new Set(below)], above:[...above]};
+  }
+
+  // ---------- Chip sizing ----------
+  function chipDims(id){
+    const t1 = "600 14px system-ui, 'Noto Sans Khmer', sans-serif";
+    const t2 = "400 11px system-ui, 'Noto Sans Khmer', sans-serif";
+    const main = label(id), subRaw=[other(id), S.g.gloss[id]||''].filter(Boolean).join(' • ');
+    const w1 = measure(main,t1)+12, w2 = subRaw?measure(subRaw,t2)+12:0; const w=Math.min(MAX_CHIP_W, Math.max(60, w1, w2));
+    const sub = subRaw? elide(subRaw,t2,w-12):''; const h = sub ? 4+18+14+4 : 4+18+4;
+    return {w,h,label:main,sub};
+  }
+
+  // ---------- Arc pack (stable layout) ----------
+  function pack(ids, cx, cy, dir, baseR){
+    const dims = ids.map(i=>[i,chipDims(i)]);
+    const centerA = dir==='above' ? -Math.PI/2 : Math.PI/2;
+    const rings=[]; let i=0, r=baseR;
+    while(i<dims.length && rings.length<16){
+      let span=ARC_SPAN_BASE, items=[], used=0; const angW=(w)=>2*Math.asin(Math.min(0.999,(w)/(2*r)));
+      for(let tries=0;tries<2;tries++){
+        items.length=0; used=0;
+        for(let k=i;k<dims.length;k++){
+          const [id,ch]=dims[k]; const aw=angW(ch.w+ANG_PAD); if(used+aw<=span){items.push([id,ch,aw]); used+=aw; i++;} else break;
+        }
+        if(items.length) break; else span=ARC_SPAN_WIDE;
+      }
+      if(!items.length){ r+=RING_GAP_MIN; continue }
+      const rem=Math.max(0,span-used), maxH=Math.max(...items.map(it=>it[1].h));
+      rings.push({r,items,rem,maxH}); r+=Math.max(RING_GAP_MIN, maxH+18);
+    }
+    const out=[]; for(const ring of rings){ const gap = ring.items.length>1 ? ring.rem/(ring.items.length+1) : ring.rem/2; let a=centerA - ((ring.items.reduce((s,it)=>s+it[2],0)+ring.rem)/2) + gap; for(const [id,ch,aw] of ring.items){ const th=a+aw/2; const bx=cx+ring.r*Math.cos(th), by=cy+ring.r*Math.sin(th); const nud=(S.nudges[S.center]||{})[id]||{dx:0,dy:0}; out.push({id, bx,by, x:bx+nud.dx, y:by+nud.dy, w:ch.w,h:ch.h, label:ch.label, sub:ch.sub, group:dir}); a+=aw+gap; } }
+    return out;
+  }
+
+  // ---------- Layout / Draw ----------
+  function relayout(){
+    fitCanvas();
+    const {below,above}=groupNeighbors();
+    const W=cv.clientWidth, H=cv.clientHeight, minHalf=Math.min(W,H)/2, baseR=Math.max(120,minHalf-R_BASE);
+    S.nodes = pack(above,0,0,'above',baseR).concat(pack(below,0,0,'below',baseR));
+  }
+
+  function draw(){
+    fitCanvas(); const dpr=window.devicePixelRatio||1; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+    const W=cv.clientWidth, H=cv.clientHeight;
+    ctx.fillStyle=C.title; ctx.font="600 16px system-ui, 'Noto Sans Khmer', sans-serif"; ctx.fillText('Khmer Morphology Graph',12,22);
+    if(!S.g||S.center==null){ card.style.display='none'; return }
+
+    // world transform: zoom/pan only view; layout fixed
+    ctx.setTransform(dpr*S.scale,0,0,dpr*S.scale, dpr*(W/2+S.panX), dpr*(H/2+S.panY));
+    // (center label moved into DOM card)
+
+    // spokes
+    ctx.lineWidth=1/S.scale; ctx.strokeStyle=C.spoke; for(const n of S.nodes){ ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(n.x,n.y); ctx.stroke(); }
+
+    // chips
+    for(const n of S.nodes){ const bg=n.group==='below'?C.chipCompBG:C.chipOtherBG, bd=n.group==='below'?C.chipCompBD:C.chipOtherBD; ctx.fillStyle=bg; ctx.fillRect(n.x-n.w/2,n.y-n.h/2,n.w,n.h); ctx.strokeStyle=bd; ctx.lineWidth=1/S.scale; ctx.strokeRect(n.x-n.w/2,n.y-n.h/2,n.w,n.h); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle=C.chipMain; ctx.font="600 14px system-ui, 'Noto Sans Khmer', sans-serif"; ctx.fillText(n.label,n.x,n.y-(n.h/2)+4+18/2); if(n.sub){ ctx.fillStyle=C.chipSub; ctx.font="400 11px system-ui, 'Noto Sans Khmer', sans-serif"; ctx.fillText(n.sub,n.x,n.y+(n.h/2)-4-14/2); } }
+
+    // back to screen space for DOM overlays
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const cx = (W/2+S.panX), cy = (H/2+S.panY);
+
+    // Center card content & position
+    const title = label(S.center);
+    const sub = [other(S.center), S.g.gloss[S.center]||''].filter(Boolean).join(' • ');
+    cardTitle.textContent = title;
+    cardSub.textContent = sub;
+    cardLink.href = 'https://en.wiktionary.org/wiki/' + encodeURIComponent(S.g.vocab[S.center]);
+    card.style.left = cx + 'px';
+    card.style.top  = cy + 'px';
+    card.style.display = 'block';
+
+    // Senses (collapsible)
+    const word = S.g.vocab[S.center];
+    const senses = (S.senses && S.senses[word]) || [];
+    expandBtn.style.display = senses.length ? 'inline-block' : 'none';
+    if(S.defsOpen && senses.length){
+      if(S.lastDefsWord !== word){
+        defsPanel.innerHTML = '<h4>All senses</h4><ul>' + senses.map(g=>`<li>${g}</li>`).join('') + '</ul>';
+        S.lastDefsWord = word;
+      }
+      card.classList.add('open');
+    } else {
+      card.classList.remove('open');
+    }
+  }
+
+  // ---------- Picking & Interaction ----------
+  function viewToWorld(mx,my){ const W=cv.clientWidth,H=cv.clientHeight; return { wx:(mx-(W/2+S.panX))/S.scale, wy:(my-(H/2+S.panY))/S.scale } }
+  function hit(wx,wy){ for(const n of S.nodes){ const x0=n.x-n.w/2,y0=n.y-n.h/2,x1=n.x+n.w/2,y1=n.y+n.h/2; if(wx>=x0&&wx<=x1&&wy>=y0&&wy<=y1) return n.id; if((wx-n.x)**2+(wy-n.y)**2<=26*26) return n.id; } return null }
+
+  const drag={mode:'none',startX:0,startY:0,startPanX:0,startPanY:0,node:null,moved:false};
+  function onMove(e){ if(!S.g){tip.style.display='none';return} const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top; if(drag.mode==='panning'){ S.panX=drag.startPanX+(mx-drag.startX); S.panY=drag.startPanY+(my-drag.startY); drag.moved=true; draw(); return } if(drag.mode==='dragging'&&drag.node!=null){ const {wx,wy}=viewToWorld(mx,my); const n=S.nodes.find(nn=>nn.id===drag.node); if(!n) return; (S.nudges[S.center] ||= {}); S.nudges[S.center][drag.node]={dx:wx-n.bx, dy:wy-n.by}; n.x=wx; n.y=wy; drag.moved=true; draw(); return } const {wx,wy}=viewToWorld(mx,my); const id=hit(wx,wy); if(id!=null){ tip1.textContent=label(id); tip2.textContent=[ other(id), S.g.gloss[id]||'' ].filter(Boolean).join(' • '); const pr=pane.getBoundingClientRect(); tip.style.left=(e.clientX-pr.left+10)+'px'; tip.style.top=(e.clientY-pr.top+10)+'px'; tip.style.display='block'; cv.style.cursor='pointer'; } else { tip.style.display='none'; cv.style.cursor='default' } }
+  function onDown(e){ if(!S.g) return; const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top; const {wx,wy}=viewToWorld(mx,my); const id=hit(wx,wy); drag.startX=mx; drag.startY=my; drag.node=id; drag.startPanX=S.panX; drag.startPanY=S.panY; drag.mode = id!=null ? 'dragging':'panning'; if(cv.setPointerCapture) cv.setPointerCapture(e.pointerId); }
+  function onUp(e){ if(!S.g) return; const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top; const moved=Math.hypot(mx-drag.startX,my-drag.startY)>CLICK_MOVE_EPS; if(drag.mode==='dragging' && drag.node!=null && !moved){ S.center=drag.node; S.panX=0; S.panY=0; S.nudges[S.center] = {}; S.defsOpen=false; relayout(); draw(); } drag.mode='none'; drag.node=null; drag.moved=false; if(cv.releasePointerCapture) cv.releasePointerCapture(e.pointerId); }
+  function onWheel(e){ if(!S.g) return; e.preventDefault(); const step = e.deltaY>0?0.9:1.11; S.scale=Math.max(.7,Math.min(2.2,S.scale*step)); draw(); }
+
+  // ---------- UI ----------
+  function applyMode(){ btnKh.classList.toggle('active', S.mode==='kh'); btnRom.classList.toggle('active', S.mode==='rom'); }
+  btnKh.addEventListener('click', ()=>{ S.mode='kh'; applyMode(); relayout(); draw(); });
+  btnRom.addEventListener('click', ()=>{ S.mode='rom'; applyMode(); relayout(); draw(); });
+  randBtn.addEventListener('click', ()=>{
+    if(!S.seeds.length) return;
+    S.center = S.seeds[Math.floor(Math.random()*S.seeds.length)];
+    S.panX=0; S.panY=0; S.nudges[S.center] = {}; S.defsOpen=false;
+    relayout(); draw();
+  });
+  expandBtn.addEventListener('click', ()=>{ S.defsOpen = !S.defsOpen; draw(); });
+
+  function renderHubs(){ hubs.innerHTML=''; const top=top10(); top.forEach(h=>{ const w=S.g.vocab[h.id], r=S.g.roman[h.id]; const a=document.createElement('div'); a.className='hub'; a.innerHTML = r? `${w} <small>(${r})</small>` : w; a.onclick=()=>{ S.center=h.id; S.panX=0; S.panY=0; S.nudges[S.center] = {}; S.defsOpen=false; relayout(); draw(); }; const d=document.createElement('div'); d.className='deg'; d.textContent=h.deg; hubs.appendChild(a); hubs.appendChild(d); }); }
+
+  function updateSugs(){ const qv=q.value.trim(); if(!qv){ sugs.style.display='none'; return } const out=[]; for(let i=0;i<S.g.vocab.length && out.length<60;i++){ const w=S.g.vocab[i]; if(w.startsWith(qv)) out.push(i); } sugs.innerHTML=''; for(const id of out){ const div=document.createElement('div'); div.className='sug'; const rom=S.g.roman[id]; div.innerHTML = `<div class="w">${S.g.vocab[id]}${rom?` <span class=\"meta\">(${rom})</span>`:''}</div>` + (S.g.gloss[id]?`<div class="gl">${S.g.gloss[id]}</div>`:''); div.onclick=()=>{ S.center=id; S.panX=0; S.panY=0; S.nudges[S.center] = {}; S.defsOpen=false; sugs.style.display='none'; q.value=''; relayout(); draw(); }; sugs.appendChild(div); } sugs.style.display=out.length?'block':'none'; }
+  q.addEventListener('input', updateSugs); q.addEventListener('keydown', (e)=>{ if(e.key==='Enter'&&sugs.firstChild){ sugs.firstChild.click() } });
+
+  // ---------- Seeds ----------
+  function computeSeeds(){ const list=[]; for(let i=0;i<S.g.vocab.length;i++){ const comp=(S.g.edges.compound[i]?.length||0)+(S.g.edges.affixed[i]?.length||0); const deg=S.g.neighbors[i]?.length||0; if(comp>=2 && deg>=6){ const mid=32,score=comp*120 - Math.abs(deg-mid)*3 + Math.min(deg,70); list.push({i,score}); } } list.sort((a,b)=>b.score-a.score); S.seeds=list.slice(0,1000).map(x=>x.i); }
+
+  // ---------- Load ----------
+  function isGraphJson(obj){ return obj && Array.isArray(obj.vocab) && obj.edges && obj.edges.compound && Array.isArray(obj.roman) && Array.isArray(obj.gloss); }
+  function handleJsonText(text, sourceLabel){
+    try{
+      const obj = JSON.parse(text);
+      if(isGraphJson(obj)){
+        loadFromText(text);
+        setStatus(`Loaded graph ${sourceLabel||''}`.trim());
+        return 'graph';
+      } else if(obj && typeof obj==='object'){
+        S.senses = obj; S.lastDefsWord=null; draw();
+        setStatus((status.textContent? status.textContent+' • ' : '') + 'senses loaded');
+        return 'senses';
+      }
+    }catch(err){ /* fallthrough */ }
+    setStatus('Unrecognized JSON file');
+    return 'unknown';
+  }
+  async function loadAuto(){
+    const graphPaths = [
+      'khmer_graph_v1.json',
+      '/khmer_graph_v1.json',
+      'data/khmer_graph_v1.json',
+      '/data/khmer_graph_v1.json',
+      'assets/khmer_graph_v1.json',
+      '/assets/khmer_graph_v1.json'
+    ];
+    for(const p of graphPaths){
+      try{
+        const r = await fetch(p, { cache:'no-store' });
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        const txt = await r.text();
+        loadFromText(txt);
+        setStatus(`Loaded graph from ${p} ${S.g.meta?.built?`(built ${S.g.meta.built})`:''}`.trim());
+        // attempt senses too
+        await loadAutoSenses();
+        return;
+      }catch(err){ console.warn('Graph fetch failed:', p, err?.message||err); }
+    }
+    setStatus('Could not auto-load graph. Use the Load buttons.');
+    file.style.display='inline-block';
+    fileSenses.style.display='inline-block';
+  }
+  async function loadAutoSenses(){
+    const sensePaths = [
+      'senses_v1.json','/senses_v1.json',
+      'data/senses_v1.json','/data/senses_v1.json',
+      'assets/senses_v1.json','/assets/senses_v1.json'
+    ];
+    for(const p of sensePaths){
+      try{
+        const r = await fetch(p, { cache:'no-store' });
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        if(data && typeof data==='object'){ S.senses=data; S.lastDefsWord=null; draw(); setStatus((status.textContent? status.textContent+' • ' : '') + `senses loaded from ${p}`); }
+        return;
+      }catch(err){ console.warn('Senses fetch failed:', p, err?.message||err); }
+    }
+  }
+  function loadFromText(txt){ S.g=JSON.parse(txt); S.inv=buildInv(S.g); S.idMap=idMap(S.g.vocab); renderHubs(); computeSeeds(); S.center = S.seeds.length ? S.seeds[0] : 0; applyMode(); relayout(); draw(); }
+  file.addEventListener('change', async (e)=>{
+    const files = e.target.files; if(!files || !files.length) return;
+    for(const f of files){ const text = await f.text(); handleJsonText(text, '(local)'); }
+  });
+  fileSenses.addEventListener('change', async (e)=>{
+    const f = e.target.files?.[0]; if(!f) return; const text = await f.text(); handleJsonText(text, '(senses local)');
+  });
+
+  // ---------- Bind canvas ----------
+  // Drag & drop local files (graph and/or senses)
+  document.addEventListener('dragover', (e)=>{ e.preventDefault() });
+  document.addEventListener('drop', async (e)=>{ e.preventDefault(); const files = e.dataTransfer?.files; if(!files) return; for(const f of files){ const text = await f.text(); handleJsonText(text, '(dropped)'); } });
+  cv.addEventListener('pointermove', onMove);
+  cv.addEventListener('pointerdown', onDown);
+  cv.addEventListener('pointerup', onUp);
+  cv.addEventListener('wheel', onWheel, {passive:false});
+  window.addEventListener('resize', ()=>{ relayout(); draw(); });
+
+  // ---------- Init ----------
+  loadAuto();
+})();
+</script>
+</body>
+</html>
