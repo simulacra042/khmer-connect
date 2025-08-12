@@ -130,7 +130,7 @@
           <button id="expandBtn" class="chev" title="Show all senses">▾</button>
         </div>
         <div class="panel" id="defsPanel"></div>
-        <a id="cardLink" class="link" target="_blank" rel="noopener">Wiktionary ↗</a>
+        
       </div>
       <div id="tip" class="tip" style="display:none">
         <div class="t1" id="tip1"></div>
@@ -167,7 +167,7 @@
   // ---------- State ----------
   const S = {
     g:null, inv:null, idMap:null, center:null,
-    mode:'kh', nodes:[], panX:0, panY:0, scale:1,
+    mode:'rom', nodes:[], panX:0, panY:0, scale:1,
     nudges:Object.create(null), hubs:[], seeds:[],
     senses:null, lastDefsWord:null, defsOpen:false,
   };
@@ -179,7 +179,7 @@
   const pane=$('pane'), status=$('status'), file=$('file'), fileSenses=$('fileSenses');
   const btnKh=$('btnKh'), btnRom=$('btnRom'), randBtn=$('randBtn');
   const q=$('q'), sugs=$('sugs'), hubs=$('hubs');
-  const card=$('centerCard'), cardTitle=$('cardTitle'), cardSub=$('cardSub'), cardLink=$('cardLink'), defsPanel=$('defsPanel'), expandBtn=$('expandBtn');// ---------- Utils ----------
+  const card=$('centerCard'), cardTitle=$('cardTitle'), cardSub=$('cardSub'), defsPanel=$('defsPanel'), expandBtn=$('expandBtn');// ---------- Utils ----------
   function fitCanvas(){ const r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1; cv.width=Math.max(1,Math.floor(r.width*dpr)); cv.height=Math.max(1,Math.floor(r.height*dpr)); }
   function setStatus(t){ status.textContent=t }
   function measure(text, font){ const t=ctx.getTransform(), f0=ctx.font; ctx.setTransform(1,0,0,1,0,0); ctx.font=font; const w=Math.ceil(ctx.measureText(text).width); ctx.font=f0; ctx.setTransform(t); return w }
@@ -270,7 +270,7 @@
     const sub = [other(S.center), S.g.gloss[S.center]||''].filter(Boolean).join(' • ');
     cardTitle.textContent = title;
     cardSub.textContent = sub;
-    cardLink.href = 'https://en.wiktionary.org/wiki/' + encodeURIComponent(S.g.vocab[S.center]);
+    
     card.style.left = cx + 'px';
     card.style.top  = cy + 'px';
     card.style.display = 'block';
@@ -278,12 +278,16 @@
     // Senses (collapsible)
     const word = S.g.vocab[S.center];
     const senses = (S.senses && S.senses[word]) || [];
-    expandBtn.style.display = senses.length ? 'inline-block' : 'none';
-    if(S.defsOpen && senses.length){
-      if(S.lastDefsWord !== word){
-        defsPanel.innerHTML = '<h4>All senses</h4><ul>' + senses.map(g=>`<li>${g}</li>`).join('') + '</ul>';
-        S.lastDefsWord = word;
+    // Always allow expanding to show the Wiktionary link (even if no senses file)
+    expandBtn.style.display = 'inline-block';
+    if (S.defsOpen) {
+      let html = '';
+      if (senses.length) {
+        html += '<h4>All senses</h4><ul>' + senses.map(g=>`<li>${g}</li>`).join('') + '</ul>';
       }
+      html += `<a href="https://en.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank" rel="noopener" class="link">Wiktionary ↗</a>`;
+      defsPanel.innerHTML = html;
+      S.lastDefsWord = word;
       card.classList.add('open');
     } else {
       card.classList.remove('open');
@@ -318,7 +322,7 @@
   q.addEventListener('input', updateSugs); q.addEventListener('keydown', (e)=>{ if(e.key==='Enter'&&sugs.firstChild){ sugs.firstChild.click() } });
 
   // ---------- Seeds ----------
-  function computeSeeds(){ const list=[]; for(let i=0;i<S.g.vocab.length;i++){ const comp=(S.g.edges.compound[i]?.length||0)+(S.g.edges.affixed[i]?.length||0); const deg=S.g.neighbors[i]?.length||0; if(comp>=2 && deg>=6){ const mid=32,score=comp*120 - Math.abs(deg-mid)*3 + Math.min(deg,70); list.push({i,score}); } } list.sort((a,b)=>b.score-a.score); S.seeds=list.slice(0,1000).map(x=>x.i); }
+  function computeSeeds(){ const list=[]; for(let i=0;i<S.g.vocab.length;i++){ const comp=(S.g.edges.compound[i]?.length||0)+(S.g.edges.affixed[i]?.length||0); const deg=S.g.neighbors[i]?.length||0; if(comp>=2 && deg>=6){ const mid=32,score=comp*120 - Math.abs(deg-mid)*3 + Math.min(deg,70); list.push({i,score}); } } list.sort((a,b)=>b.score-a.score); S.seeds=list.slice(0,5000).map(x=>x.i); }
 
   // ---------- Load ----------
   function isGraphJson(obj){ return obj && Array.isArray(obj.vocab) && obj.edges && obj.edges.compound && Array.isArray(obj.roman) && Array.isArray(obj.gloss); }
