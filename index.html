@@ -27,6 +27,8 @@
     .title{font-weight:700}
     .muted{color:var(--muted);font-size:12px}
     .content{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 42px)}
+    .content.collapsed{grid-template-columns:1fr}
+    .content.collapsed .left{display:none}
     .left{border-right:1px solid var(--border);padding:12px;overflow:auto}
     .ctrl{margin-bottom:12px}
     .input{width:100%;padding:.45rem .6rem;border:1px solid var(--border);border-radius:.375rem;font-size:16px;background:#0a0f1e;color:var(--fg)}
@@ -82,6 +84,11 @@
 
     /* Hidden by default; shown only if auto-load fails */
     #file{display:none}
+    #toggleSide{order:-1;margin-right:.5rem}
+    #sidebarHint{position:fixed;left:12px;bottom:12px;z-index:50;background:#0a0f1e;border:1px solid #334155;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);padding:.6rem .7rem;display:none;max-width:340px}
+    #sidebarHint .t{font-weight:600;margin-bottom:.25rem}
+    #sidebarHint .m{font-size:12px;color:#cbd5e1;margin-bottom:.5rem}
+    #sidebarHint .actions{display:flex;gap:.5rem;justify-content:flex-end}
   </style>
 </head>
 <body>
@@ -89,12 +96,13 @@
   <div class="top">
     <strong class="title">Khmer Word Map</strong>
     <div style="flex:1"></div>
+    <button id="toggleSide" class="btn" title="Toggle sidebar">☰ Panel</button>
     <span id="status" class="muted"></span>
     <input id="file" type="file" accept=".json" multiple class="btn" title="Load khmer_graph_v1.json manually" />
     <input id="fileSenses" type="file" accept=".json" class="btn" title="Load senses_v1.json (optional)" style="display:none" />
   </div>
 
-  <div class="content">
+  <div id="content" class="content">
     <div class="left">
       <div class="ctrl">
         <div class="muted" style="font-weight:600;margin-bottom:6px">Alphabet</div>
@@ -141,6 +149,8 @@
   </div>
 </div>
 
+<div id="sidebarHint"><div class="t">Tip: Panel hidden</div><div class="m">Tap “☰ Panel” to open the sidebar. You can toggle it anytime.</div><div class="actions"><button id="hintOpen" class="btn">Open panel</button><button id="hintDismiss" class="btn">Dismiss</button></div></div>
+
 <script>
 // Khmer Morphology Visualizer (clean single-file). Assumes khmer_graph_v1.json in same folder.
 (function(){
@@ -178,7 +188,7 @@
   const $ = (id)=>document.getElementById(id);
   const cv = $('cv'), ctx = cv.getContext('2d');
   const tip = $('tip'), tip1=$('tip1'), tip2=$('tip2');
-  const pane=$('pane'), status=$('status'), file=$('file'), fileSenses=$('fileSenses');
+  const pane=$('pane'), status=$('status'), file=$('file'), fileSenses=$('fileSenses'), toggleSide=$('toggleSide'), contentEl=$('content'), hintEl=$('sidebarHint'), hintOpen=$('hintOpen'), hintDismiss=$('hintDismiss');
   const btnKh=$('btnKh'), btnRom=$('btnRom'), randBtn=$('randBtn'), resetBtn=$('resetBtn');
   const q=$('q'), sugs=$('sugs'), hubs=$('hubs');
   const card=$('centerCard'), cardTitle=$('cardTitle'), cardSub=$('cardSub'), defsPanel=$('defsPanel'), expandBtn=$('expandBtn');// ---------- Utils ----------
@@ -364,7 +374,7 @@
       link.target='_blank'; link.rel='noopener'; link.className='link'; link.textContent='Wiktionary ↗';
       defsPanel.appendChild(link);
       if(senses.length){
-        const h4=document.createElement('h4'); h4.textContent='All senses'; defsPanel.appendChild(h4);
+        const h4=document.createElement('h4'); h4.textContent='All Definitions'; defsPanel.appendChild(h4);
         const ul=document.createElement('ul');
         for(const g of senses){
           const li=document.createElement('li'); li.textContent=g; ul.appendChild(li);
@@ -430,6 +440,33 @@
   });
   expandBtn.addEventListener('click', ()=>{ S.defsOpen = !S.defsOpen; draw(); });
   resetBtn.addEventListener('click', ()=>{ S.panX=0; S.panY=0; S.scale=1; draw(); });
+
+  // Sidebar collapse / expand
+  function setSidebar(collapsed, fromUser=false){
+    if(!contentEl) return;
+    contentEl.classList.toggle('collapsed', collapsed);
+    try{ if(fromUser) localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); }catch(_){ }
+  }
+  (function initSidebar(){
+    let stored=null, hintSeen=null; 
+    try{ stored = localStorage.getItem('sidebarCollapsed'); hintSeen = localStorage.getItem('sidebarHintSeen'); }catch(_){ }
+    if(stored===null){
+      if(window.innerWidth < 720){ setSidebar(true, false); if(!hintSeen) showSidebarHint(); }
+      else { setSidebar(false, false); }
+    } else {
+      setSidebar(stored==='1', false);
+    }
+  })();
+  if(toggleSide){ toggleSide.addEventListener('click', ()=>{ const collapsed = !contentEl.classList.contains('collapsed'); setSidebar(collapsed, true); }); }
+  window.addEventListener('resize', ()=>{
+    let stored=null; try{ stored = localStorage.getItem('sidebarCollapsed'); }catch(_){ }
+    if(stored===null){ /* keep current state */ }
+  });
+
+  function showSidebarHint(){ if(hintEl) hintEl.style.display='block'; }
+  function hideSidebarHint(){ if(hintEl) hintEl.style.display='none'; try{ localStorage.setItem('sidebarHintSeen','1'); }catch(_){ } }
+  if(hintOpen){ hintOpen.addEventListener('click', ()=>{ setSidebar(false, true); hideSidebarHint(); }); }
+  if(hintDismiss){ hintDismiss.addEventListener('click', hideSidebarHint); }
 
   function renderHubs(){
     hubs.textContent='';
